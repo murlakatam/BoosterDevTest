@@ -1,0 +1,113 @@
+﻿@page "/get-lorem-ipsum-stats"
+@using System.Text.Json.Serialization
+@using Booster.Shared.Domain
+@using global::Blazor.Extensions
+@using Newtonsoft.Json
+
+@inject IJSRuntime jsRuntime
+
+<h1>DevTest Implementation</h1>
+
+<p>This component wait until data is streamed from SignalR Hub</p>
+
+@if (_stats == null)
+{
+    <p><em>Loading stats from SignalR...</em></p>
+}
+else
+{
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Requirement</th>
+                <th>Value</th>
+            </tr>
+        </thead>
+        <tbody>
+            @if (_stats.Chars != null && _stats.Words != null)
+            {
+                <tr>
+                    <td>Total number of characters and words:</td>
+                    <td>@($"{_stats.Chars.TotalCharsInText} chars and {_stats.Words.TotalWordsInText} words")</td>
+                </tr>
+            }
+
+            @if (_stats.Words != null)
+            {
+                <tr>
+                    <td>The 5 largest words:</td>
+                    <td>
+                        @(string.Join(",", _stats.Words.FiveLargest.Select(x => x.Text)))
+                    </td>
+                </tr>
+                <tr>
+                    <td>The 5 smallest words:</td>
+                    <td>
+                        @(string.Join(",", _stats.Words.FiveSmallest.Select(x => x.Text)))
+                    </td>
+                </tr>
+                <tr>
+                    <td>10 most frequently used word:</td>
+                    <td>
+                        @(string.Join(",", _stats.Words.TenMostUsed.Select(x => x.Text)))
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+    @if (_stats.Chars != null)
+    {
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Char</th>
+                    <th>Appeared Times</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var ch in _stats.Chars.AllCharsOrderedByAppearance)
+                {
+                    <tr>
+                        <td>@ch.AChar</td>
+                        <td>@ch.AppearedTimes</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+}
+
+@code {
+
+    private Stats _stats { get; set; }
+    private HubConnection _connection { get; set; }
+
+    [Inject]
+    private HubConnectionBuilder _hubConnectionBuilder { get; set; }
+
+
+    protected override async Task OnInitializedAsync()
+    {
+        _connection = _hubConnectionBuilder
+            .WithUrl("/loremIpsumHub",
+                opt =>
+                {
+                    opt.LogLevel = SignalRLogLevel.Trace;
+                    opt.Transport = HttpTransportType.WebSockets;
+                })
+            .Build();
+
+        _connection.On<string>
+    ("OnStatHasChanged", Handle);
+    await _connection.StartAsync();
+    }
+
+
+    private Task Handle(string stats)
+    {
+        _stats = JsonConvert.DeserializeObject<Stats>(stats);
+        StateHasChanged();
+        return Task.CompletedTask;
+    }
+
+    }
